@@ -1,34 +1,41 @@
 # Document Assistant
 
-A Python document assistant built with LangGraph, LangChain, and OpenAI-compatible models for question answering, summarization, and arithmetic over local text documents.
+**Udacity Nanodegree** · [Agentic AI Engineer with LangChain and LangGraph](https://www.udacity.com/course/agentic-ai-engineer-with-langchain-and-langgraph--nd901)
 
-The project demonstrates intent routing, tool calling, structured response models, and conversation sessions through a terminal interface, a Python API, and a Jupyter notebook.
+**Course 1 of 3** · [LangChain Agentic AI Fundamentals](https://www.udacity.com/course/langchain-agentic-ai-fundamentals--cd14639)
 
-## Features
+A Python assistant that answers questions about local documents, summarizes their contents, and performs arithmetic. This course project demonstrates intent routing in LangGraph, tool calling with LangChain, structured outputs with Pydantic, and short-term conversation memory.
 
-- Routes requests to Q&A, summarization, or calculation nodes.
-- Searches local documents with keyword matching and supplies up to three matching documents to the model.
-- Provides document-reader and arithmetic-calculator tools.
-- Uses Pydantic models for intent classification and responses.
-- Saves conversation transcripts as JSON and keeps graph checkpoints in memory.
-- Supports OpenAI and Vocareum through environment configuration.
+Run it from the terminal, integrate it through the Python API, or explore the workflow in the [interactive Jupyter notebook](notebooks/document_assistant_demo.ipynb).
 
-This is an educational application. It has no embedding index, vector database, PDF parser, web interface, or HTTP API.
+## Example requests
+
+| Task | Example |
+| --- | --- |
+| Question answering | What does the Q1 sales report say about monthly revenue? |
+| Summarization | Summarize the Q1 sales report. |
+| Calculation | Calculate 50000 + 60000 + 70000. |
 
 ## Quick start
 
-Run commands from the repository root in a Python virtual environment. Dependencies are listed in [requirements.txt](requirements.txt); the repository has no lockfile or declared minimum Python version. See the [installation guide](docs/QUICK_START.md) for compatibility notes.
+### 1. Clone and install
+
+Use Git and a recent Python 3 release with `venv` and `pip`. For the tested Python version and Windows activation instructions, see the [installation guide](docs/QUICK_START.md).
 
 ```bash
-git clone https://github.com/robertishimurasousa/Doc-Assistant-Project.git
-cd Doc-Assistant-Project
+git clone https://github.com/robertishimurasousa/Udacity-Doc-Assistant-Project.git
+cd Udacity-Doc-Assistant-Project
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-For direct OpenAI access, edit `.env`:
+### 2. Configure a model provider
+
+The `.env` template uses Vocareum. If you have a course-provided API key, follow the [Vocareum setup guide](docs/VOCAREUM_SETUP.md).
+
+For direct OpenAI access, replace the provider settings in `.env` with the following and remove `OPENAI_BASE_URL` from the file and your shell environment.
 
 ```dotenv
 API_PROVIDER=openai
@@ -37,25 +44,39 @@ DEFAULT_MODEL=gpt-4
 DEFAULT_TEMPERATURE=0
 ```
 
-Remove the copied `OPENAI_BASE_URL` line when using direct OpenAI access. For a course-provided key, follow [Vocareum setup](docs/VOCAREUM_SETUP.md). The model above is the code default; the selected model must be available to your account and support tool calling.
+`gpt-4` is the application default. Use a model available to your account that supports tool calling and structured outputs. See the [configuration reference](docs/CONFIGURATION.md).
 
-Start with one bundled sample:
+### 3. Run the sample
+
+From the repository root, start the assistant with the bundled sales report.
 
 ```bash
 python main.py data/sales_report_q1_2024.txt
 ```
 
-Try:
+Enter one of the [example requests](#example-requests) at the prompt. Use `/stats` to inspect the session and `/quit` to exit.
 
-```text
-What does the Q1 sales report say about monthly revenue?
-Summarize the Q1 sales report.
-Calculate 50000 + 60000 + 70000.
-/stats
-/quit
+Without a configured model, you can still load documents and manage sessions from the terminal.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    request[User request] --> classify[Classify intent]
+    classify --> qa[Answer a question]
+    classify --> summary[Summarize documents]
+    classify --> calculate[Perform a calculation]
+    qa --> memory[Update conversation memory]
+    summary --> memory
+    calculate --> memory
+    memory --> response[Return response and save transcript]
 ```
 
-Answers depend on the configured model. Without a configured LLM, document and session management remain available, but queries return configuration messages rather than document answers.
+- **Routing and tools.** LangGraph sends each request to a specialized node. The node asks the model which document or calculator tools to call, executes those calls once, and generates a response.
+- **Document retrieval.** The document reader uses keyword matching to return up to three documents per call.
+- **State and persistence.** Pydantic schemas define the intent and response models. Graph checkpoints stay in memory, while session transcripts are saved as JSON.
+
+See the [implementation guide](docs/IMPLEMENTATION.md) for graph state, tool execution, and session behavior.
 
 ## Interfaces
 
@@ -66,14 +87,14 @@ python main.py ./data
 python main.py
 ```
 
-Directory loading recursively includes lowercase `.txt`, `.md`, `.json`, and `.csv` files as UTF-8 text. Loading `data/` also includes its README.
+The terminal scans directories recursively for UTF-8 files with lowercase `.txt`, `.md`, `.json`, and `.csv` extensions. Loading `data/` also includes its README.
 
 | Command | Action |
 | --- | --- |
 | `/load <path>` | Append documents from a file or directory. |
 | `/stats` | Display document and session counts. |
 | `/sessions` | List saved session IDs. |
-| `/clear` | Start a new conversation; saved transcripts remain on disk. |
+| `/clear` | Start a new conversation and keep saved transcripts on disk. |
 | `/help` | Display command help. |
 | `/quit` or `/exit` | Exit the application. |
 
@@ -93,29 +114,11 @@ assistant.load_documents()
 print(assistant.query("What does the report say about monthly revenue?"))
 ```
 
-`query()` returns a string. Q&A returns answer text; calculation and summarization currently return string representations of their response models. See the [API reference](docs/API_REFERENCE.md) for structured state access.
+`query()` returns answer text for Q&A and string representations of the response models for summarization and calculation. See the [API reference](docs/API_REFERENCE.md) for structured state access and session restoration.
 
 ### Notebook
 
-The [interactive demo](notebooks/document_assistant_demo.ipynb) walks through queries, tools, and sessions. Follow the [notebook guide](notebooks/README.md) for kernel and working-directory setup.
-
-## Architecture
-
-```mermaid
-flowchart TD
-    input[User request] --> classify[classify_intent]
-    classify --> qa[qa_agent]
-    classify --> summary[summarization_agent]
-    classify --> calculate[calculation_agent]
-    qa --> memory[update_memory]
-    summary --> memory
-    calculate --> memory
-    memory --> output[Response and saved transcript]
-```
-
-Each specialist asks the model for tool calls, executes the returned calls once, and generates a response. Calculator use is requested by the prompt but is not enforced by the graph. Source fields can contain tool names, and confidence values are not calibrated accuracy measures.
-
-Read the [architecture guide](docs/IMPLEMENTATION.md) for execution and memory details.
+Follow the [notebook guide](notebooks/README.md) to set up the kernel and explore queries, tool calls, and sessions interactively.
 
 ## Repository layout
 
@@ -127,36 +130,31 @@ Read the [architecture guide](docs/IMPLEMENTATION.md) for execution and memory d
 ├── docs/                # Setup, reference, architecture, and historical notes
 ├── notebooks/           # Interactive demonstration
 ├── tests/               # Automated tests and manual demonstrations
-├── sessions/            # JSON conversation transcripts
+├── sessions/            # JSON conversation transcripts (generated locally)
 ├── .env.example         # Configuration template
 ├── pyproject.toml       # Pytest and coverage configuration
 └── requirements.txt     # Runtime, notebook, and test dependencies
 ```
 
-## Documentation
+## Testing
 
-- [Documentation index](docs/README.md)
-- [Installation and first query](docs/QUICK_START.md)
-- [Configuration reference](docs/CONFIGURATION.md)
-- [Python API reference](docs/API_REFERENCE.md)
-- [Architecture and implementation](docs/IMPLEMENTATION.md)
-- [Testing guide](docs/TESTING_GUIDE.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Contributing](CONTRIBUTING.md)
-- [Project description and GitHub topics](docs/PROJECT_METADATA.md)
-
-## Development
-
-Run the focused offline suite:
+Run the focused offline tests for routing, agent behavior, and response schemas from the repository root.
 
 ```bash
 python -m pytest tests/test_schemas.py tests/test_agents.py tests/test_agent_logic.py -o addopts=""
 ```
 
-This runs assertions without the default coverage options. The 57 selected tests passed in the documentation validation, but their 39.50% coverage is below the configured 50% threshold. Other files in `tests/` include manual demonstrations that may call the provider. Read the [testing guide](docs/TESTING_GUIDE.md) for the full distinction.
+The override runs assertions with the default coverage options disabled. See the [testing guide](docs/TESTING_GUIDE.md) for the coverage threshold and manual provider demonstrations.
+
+## Further reading
+
+- [Documentation index](docs/README.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Contributing](CONTRIBUTING.md)
+- [Project description and GitHub topics](docs/PROJECT_METADATA.md)
 
 ## Data handling and project status
 
-Retrieved text and recent conversation history are sent to the configured provider. Transcripts are stored as plaintext JSON. Review generated session files before committing.
+The assistant sends retrieved document text and recent conversation history to the configured model provider. It saves transcripts as plaintext JSON in `sessions/`. Review generated transcripts before committing.
 
 The repository does not currently contain a `LICENSE` file. Earlier course and implementation notes are retained under `docs/` and identified in the documentation index.
